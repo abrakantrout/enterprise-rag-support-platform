@@ -1,0 +1,39 @@
+# Environment variables and local settings
+.env
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python caching & testing
+__pycache__/
+.pytest_cache/
+*.pyc
+*.pyo
+*.pyd
+.coverage
+htmlcov/
+
+# Databases
+*.sqlite
+*.db
+
+# Application data directories
+logs/
+*.log
+uploads/*
+!uploads/.gitkeep
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# IDE configurations
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp

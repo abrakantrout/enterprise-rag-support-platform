@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: rag_postgres_db
+    environment:
+      POSTGRES_DB: rag_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rag_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: rag_chroma_db
+    environment:
+      ANONYMIZED_TELEMETRY: "False"
+    ports:
+      - "8001:8000"  # Expose Chroma to host on 8001 to avoid conflicting with backend on 8000
+    volumes:
+      - chromadata:/chroma/chroma
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/8000"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rag_backend_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: "postgresql://postgres:postgres@db:5432/rag_db"
+      CHROMA_HOST: "chroma"
+      CHROMA_PORT: 8000
+      LOG_LEVEL: "INFO"
+      LOG_FILE: "/workspace/logs/app.log"
+      UPLOADS_DIR: "/workspace/uploads"
+      GEMINI_API_KEY: "mock-key"
+    volumes:
+      - ./backend:/workspace
+      - ./docs:/workspace/docs  # Expose documentation in container
+      - backendlogs:/workspace/logs
+      - backenduploads:/workspace/uploads
+      - ./.env:/workspace/.env
+    depends_on:
+      db:
+        condition: service_healthy
+      chroma:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: rag_frontend_ui
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./frontend:/workspace
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  chromadata:
+  backendlogs:
+  backenduploads:
