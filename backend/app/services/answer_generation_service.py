@@ -87,19 +87,14 @@ class AnswerGenerationService:
             logger.error(f"Gemini execution step failed during answer generation: {str(e)}")
             raise AnswerGenerationError(f"Failed to generate answer from Gemini provider: {str(e)}")
 
-        # 7. Build the final structured response (excluding sensitive metadata or raw chunks)
-        # Map source fields as requested: document, page, chunk_id
-        formatted_sources = []
-        for src in context_sources:
-            formatted_sources.append({
-                "document": src.get("filename", "Unknown"),
-                "page": src.get("page_number"),
-                "chunk_id": src.get("chunk_id")
-            })
+        # 7. Build the final structured response using the CitationService
+        from app.services.citation_service import CitationService
+        citation_service = CitationService()
+        citations = citation_service.build_citations(optimized_chunks)
 
         return {
             "answer": answer_text,
-            "sources": formatted_sources,
+            "sources": citations,
             "retrieval_count": optimized_count,
             "model": settings.gemini_model
         }

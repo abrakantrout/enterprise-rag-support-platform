@@ -18,9 +18,18 @@ class AnswerRequestSchema(BaseModel):
     question: str = Field(..., description="The query/question to answer.")
 
 class AnswerSourceSchema(BaseModel):
+    citation_id: str
+    document_id: str
+    document_name: str
+    page_number: Optional[int] = None
+    chunk_id: str
+    chunk_index: Optional[int] = None
+    similarity_score: float
+    source_label: str
+    text_preview: str
+    # Backward compatibility keys
     document: str
     page: Optional[int] = None
-    chunk_id: str
 
 class AnswerResponseSchema(BaseModel):
     question: str
