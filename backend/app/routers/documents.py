@@ -666,3 +666,115 @@ async def persist_document_chunks(
         "status": "Completed",
         "message": f"Successfully persisted {number_of_chunks} document chunks into PostgreSQL."
     }
+
+
+# --- Embeddings Generation Schemas & Endpoint ---
+class DocumentEmbeddingsResponseSchema(BaseModel):
+    document_id: str
+    total_chunks: int
+    embeddings_generated: int
+    failed_chunks: int
+    embedding_model: str
+    status: str
+    message: str
+
+@router.post("/{document_id}/embeddings", response_model=DocumentEmbeddingsResponseSchema)
+async def generate_document_embeddings(
+    document_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_or_agent)
+):
+    """
+    Validates document and chunks, checks API key presence, generates embeddings
+    for all chunks using the EmbeddingService, and updates their status in PostgreSQL.
+    """
+    # 1. Validate Document is Active & Not Soft-deleted
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.is_deleted == False,
+        Document.organization_id == current_user.organization_id
+    ).first()
+
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+
+    # 2. Retrieve document chunks
+    chunks = db.query(DocumentChunk).filter(
+        DocumentChunk.document_id == document_id
+    ).order_by(DocumentChunk.chunk_index.asc()).all()
+
+    if not chunks:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Document has no chunks. Please parse and chunk the document first."
+        )
+
+    # 3. Validate that no chunk is empty
+    for chunk in chunks:
+        if not chunk.chunk_text or not chunk.chunk_text.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="One or more document chunks contain empty text."
+            )
+
+    # 4. Check for Google API key configuration
+    if not settings.google_api_key or settings.google_api_key in ("your-google-api-key-here", ""):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google API key is missing or not configured."
+        )
+
+    # 5. Initialize embedding service and generate embeddings
+    from app.services.embedding_service import EmbeddingService, EmbeddingServiceError
+    embed_service = EmbeddingService()
+
+    texts = [chunk.chunk_text for chunk in chunks]
+    
+    try:
+        # Generate embeddings in batch
+        embeddings = embed_service.generate_embeddings(texts)
+        
+        # 6. Mark each chunk embedding status as Completed
+        for chunk in chunks:
+            chunk.embedding_status = "Completed"
+            chunk.embedding_model = settings.embedding_model
+            chunk.embedded_at = datetime.utcnow()
+            
+        db.commit()
+        
+        return {
+            "document_id": document_id,
+            "total_chunks": len(chunks),
+            "embeddings_generated": len(embeddings),
+            "failed_chunks": 0,
+            "embedding_model": settings.embedding_model,
+            "status": "Completed",
+            "message": f"Successfully generated and persisted {len(embeddings)} embeddings metadata in PostgreSQL."
+        }
+    except EmbeddingServiceError as e:
+        # Mark chunks as Failed
+        for chunk in chunks:
+            chunk.embedding_status = "Failed"
+            chunk.embedding_model = settings.embedding_model
+            chunk.embedded_at = datetime.utcnow()
+        db.commit()
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Embedding generation failed: {str(e)}"
+        )
+    except Exception as e:
+        # General unexpected errors
+        for chunk in chunks:
+            chunk.embedding_status = "Failed"
+            chunk.embedding_model = settings.embedding_model
+            chunk.embedded_at = datetime.utcnow()
+        db.commit()
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error during embedding generation: {str(e)}"
+        )

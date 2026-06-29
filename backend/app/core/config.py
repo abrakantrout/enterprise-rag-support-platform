@@ -38,6 +38,8 @@ class Settings(BaseSettings):
 
     # AI Provider configuration
     gemini_api_key: str = Field("mock-key", validation_alias="GEMINI_API_KEY")
+    google_api_key: str = Field("", validation_alias="GOOGLE_API_KEY")
+    embedding_model: str = Field("models/text-embedding-004", validation_alias="EMBEDDING_MODEL")
 
     # Security Configuration
     jwt_secret: str = Field(

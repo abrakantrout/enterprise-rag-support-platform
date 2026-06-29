@@ -129,6 +129,9 @@ class DocumentChunk(Base):
     character_count = Column(Integer, nullable=False)
     start_offset = Column(Integer, nullable=True)
     end_offset = Column(Integer, nullable=True)
+    embedding_status = Column(String(50), default="Pending", nullable=False)
+    embedding_model = Column(String(255), nullable=True)
+    embedded_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
