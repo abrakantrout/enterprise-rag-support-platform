@@ -778,3 +778,137 @@ async def generate_document_embeddings(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error during embedding generation: {str(e)}"
         )
+
+
+# --- Vector Indexing Schemas & Endpoint ---
+class DocumentIndexingResponseSchema(BaseModel):
+    document_id: str
+    chunks_indexed: int
+    failed_chunks: int
+    collection_name: str
+    status: str
+    message: str
+
+@router.post("/{document_id}/index", response_model=DocumentIndexingResponseSchema)
+async def index_document_chunks(
+    document_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_or_agent)
+):
+    """
+    Validates document, chunks, and embedding status, retrieves embeddings,
+    and indexes document chunk metadata and vectors into ChromaDB.
+    """
+    # 1. Validate Document is Active & Not Soft-deleted
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.is_deleted == False,
+        Document.organization_id == current_user.organization_id
+    ).first()
+
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+
+    # 2. Retrieve document chunks
+    chunks = db.query(DocumentChunk).filter(
+        DocumentChunk.document_id == document_id
+    ).order_by(DocumentChunk.chunk_index.asc()).all()
+
+    if not chunks:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Document has no chunks. Please chunk the document first."
+        )
+
+    # 3. Validate that embeddings are completed for all chunks
+    for chunk in chunks:
+        if chunk.embedding_status != "Completed":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="One or more chunks do not have completed embeddings. Please run embeddings first."
+            )
+
+    # 4. Generate/Retrieve the embeddings vectors
+    from app.services.embedding_service import EmbeddingService, EmbeddingServiceError
+    embed_service = EmbeddingService()
+    
+    texts = [c.chunk_text for c in chunks]
+    try:
+        embeddings = embed_service.generate_embeddings(texts)
+    except EmbeddingServiceError as e:
+        for chunk in chunks:
+            chunk.indexed_status = "Failed"
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve embeddings vectors: {str(e)}"
+        )
+
+    # 5. Build chunks payload for ChromaDB indexing
+    chunks_data = []
+    for chunk, embedding in zip(chunks, embeddings):
+        # Format metadata dictionary with strict value types (no None values allowed in Chroma)
+        metadata = {
+            "document_id": document_id,
+            "chunk_id": chunk.id,
+            "chunk_index": chunk.chunk_index,
+            "organization_id": doc.organization_id,
+            "embedding_model": chunk.embedding_model or settings.embedding_model,
+            "created_at": chunk.created_at.isoformat() if chunk.created_at else datetime.utcnow().isoformat()
+        }
+        if chunk.page_number is not None:
+            metadata["page_number"] = chunk.page_number
+        if doc.filename:
+            metadata["filename"] = doc.filename
+        if doc.file_type:
+            metadata["file_type"] = doc.file_type
+
+        chunks_data.append({
+            "chunk_id": chunk.id,
+            "text": chunk.chunk_text,
+            "embedding": embedding,
+            "metadata": metadata
+        })
+
+    # 6. Index into ChromaDB
+    from app.services.vector_indexing_service import VectorIndexingService, VectorIndexingError
+    indexing_service = VectorIndexingService()
+
+    try:
+        indexed_count = indexing_service.index_chunks(document_id, chunks_data)
+        
+        # 7. Update chunk status in PostgreSQL database
+        for chunk in chunks:
+            chunk.indexed_status = "Completed"
+            chunk.indexed_at = datetime.utcnow()
+            chunk.vector_id = chunk.id
+            
+        db.commit()
+        
+        return {
+            "document_id": document_id,
+            "chunks_indexed": indexed_count,
+            "failed_chunks": 0,
+            "collection_name": settings.chroma_collection_name,
+            "status": "Completed",
+            "message": f"Successfully indexed {indexed_count} chunks into ChromaDB."
+        }
+    except VectorIndexingError as e:
+        for chunk in chunks:
+            chunk.indexed_status = "Failed"
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Vector indexing failed: {str(e)}"
+        )
+    except Exception as e:
+        for chunk in chunks:
+            chunk.indexed_status = "Failed"
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error during indexing: {str(e)}"
+        )

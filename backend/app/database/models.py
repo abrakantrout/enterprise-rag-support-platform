@@ -132,6 +132,9 @@ class DocumentChunk(Base):
     embedding_status = Column(String(50), default="Pending", nullable=False)
     embedding_model = Column(String(255), nullable=True)
     embedded_at = Column(DateTime, nullable=True)
+    indexed_status = Column(String(50), default="Pending", nullable=False)
+    indexed_at = Column(DateTime, nullable=True)
+    vector_id = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships

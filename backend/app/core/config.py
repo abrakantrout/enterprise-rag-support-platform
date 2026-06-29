@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     # ChromaDB Vector DB Configuration
     chroma_host: str = Field("chroma", validation_alias="CHROMA_HOST")
     chroma_port: int = Field(8000, validation_alias="CHROMA_PORT")
+    chroma_collection_name: str = Field("enterprise_knowledge_chunks", validation_alias="CHROMA_COLLECTION_NAME")
 
     # AI Provider configuration
     gemini_api_key: str = Field("mock-key", validation_alias="GEMINI_API_KEY")
