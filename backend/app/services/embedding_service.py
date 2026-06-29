@@ -48,7 +48,17 @@ class EmbeddingService:
 
         # Handle mock embedding generation for testing
         if self.api_key.startswith("mock-") or self.api_key == "mock-key":
-            return [0.1] * 768
+            import hashlib
+            import math
+            h = hashlib.sha256(text.encode('utf-8')).hexdigest()
+            vec = []
+            for idx in range(768):
+                val = int(h[idx % len(h)], 16) / 15.0
+                vec.append(val)
+            norm = math.sqrt(sum(v*v for v in vec))
+            if norm > 0:
+                vec = [v/norm for v in vec]
+            return vec
 
         try:
             response = genai.embed_content(
@@ -87,7 +97,20 @@ class EmbeddingService:
 
         # Handle mock embedding generation for testing
         if self.api_key.startswith("mock-") or self.api_key == "mock-key":
-            return [[0.1] * 768 for _ in texts]
+            import hashlib
+            import math
+            results = []
+            for text in texts:
+                h = hashlib.sha256(text.encode('utf-8')).hexdigest()
+                vec = []
+                for idx in range(768):
+                    val = int(h[idx % len(h)], 16) / 15.0
+                    vec.append(val)
+                norm = math.sqrt(sum(v*v for v in vec))
+                if norm > 0:
+                    vec = [v/norm for v in vec]
+                results.append(vec)
+            return results
 
         try:
             response = genai.embed_content(

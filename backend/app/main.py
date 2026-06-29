@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.logging_config import setup_logging
-from app.routers import health, auth, documents
+from app.routers import health, auth, documents, retrieval
 
 # Initialize application logging before other operations
 setup_logging()
@@ -29,5 +29,6 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(documents.router)
+app.include_router(retrieval.router)
 
 logger.info(f"Successfully initialized application foundation: {settings.app_name} v{settings.app_version}")

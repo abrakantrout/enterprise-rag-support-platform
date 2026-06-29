@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     chroma_host: str = Field("chroma", validation_alias="CHROMA_HOST")
     chroma_port: int = Field(8000, validation_alias="CHROMA_PORT")
     chroma_collection_name: str = Field("enterprise_knowledge_chunks", validation_alias="CHROMA_COLLECTION_NAME")
+    top_k_results: int = Field(5, validation_alias="TOP_K_RESULTS")
+    min_similarity_score: float = Field(0.70, validation_alias="MIN_SIMILARITY_SCORE")
 
     # AI Provider configuration
     gemini_api_key: str = Field("mock-key", validation_alias="GEMINI_API_KEY")
