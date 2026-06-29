@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     gemini_api_key: str = Field("mock-key", validation_alias="GEMINI_API_KEY")
     google_api_key: str = Field("", validation_alias="GOOGLE_API_KEY")
     embedding_model: str = Field("models/text-embedding-004", validation_alias="EMBEDDING_MODEL")
+    gemini_model: str = Field("models/gemini-1.5-flash", validation_alias="GEMINI_MODEL")
+    temperature: float = Field(0.0, validation_alias="TEMPERATURE")
+    max_output_tokens: int = Field(1024, validation_alias="MAX_OUTPUT_TOKENS")
+    request_timeout_seconds: int = Field(30, validation_alias="REQUEST_TIMEOUT_SECONDS")
 
     # Security Configuration
     jwt_secret: str = Field(
