@@ -80,3 +80,59 @@ async def semantic_search(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An unexpected error occurred during search: {str(e)}"
         )
+
+
+# --- Debug Optimization Endpoint ---
+
+class OptimizationSummarySchema(BaseModel):
+    original_chunks: int
+    optimized_chunks: int
+    duplicates_removed: int
+    near_duplicates_removed: int
+    discarded_empty: int
+    estimated_characters: int
+
+class OptimizeResponseSchema(BaseModel):
+    optimized_chunks: List[RetrievalResultItemSchema]
+    optimization_summary: OptimizationSummarySchema
+
+@router.post("/optimize", response_model=OptimizeResponseSchema)
+async def optimize_retrieval_endpoint(
+    body: List[RetrievalResultItemSchema],
+    current_user: User = Depends(admin_or_agent)
+):
+    """
+    Developer debug endpoint that runs context optimization over a set of input chunks.
+    Restricted to Administrators and Support Agents.
+    """
+    from app.services.context_optimizer_service import ContextOptimizerService
+    optimizer = ContextOptimizerService()
+    
+    # Convert input pydantic schemas to standard dicts
+    input_chunks = []
+    for item in body:
+        input_chunks.append({
+            "chunk_id": item.chunk_id,
+            "document_id": item.document_id,
+            "page_number": item.page_number,
+            "chunk_index": item.chunk_index,
+            "similarity_score": item.similarity_score,
+            "chunk_text": item.chunk_text,
+            "metadata": {
+                "filename": item.metadata.filename,
+                "organization_id": item.metadata.organization_id
+            }
+        })
+        
+    try:
+        optimized, summary = optimizer.optimize_context(input_chunks)
+        return {
+            "optimized_chunks": optimized,
+            "optimization_summary": summary
+        }
+    except Exception as e:
+        logger.error(f"Context optimization failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Context optimization failed: {str(e)}"
+        )
