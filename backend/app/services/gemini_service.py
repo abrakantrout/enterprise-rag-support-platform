@@ -111,3 +111,62 @@ class GeminiService:
                 raise GeminiServiceError(f"Unexpected error: {str(e)}")
 
         raise GeminiServiceError("Failed to generate answer from Gemini.")
+
+    def generate_answer_stream(self, prompt: str):
+        """
+        Sends the prompt to Gemini and yields text chunks as they arrive.
+        """
+        if not prompt or not prompt.strip():
+            raise ValueError("Prompt cannot be empty.")
+
+        self._check_configuration()
+        if not self._configured:
+            raise GeminiServiceError("Google/Gemini API key is missing or not configured.")
+
+        # Handle simulated failure modes for testing
+        if self.api_key.startswith("fail-"):
+            raise GeminiServiceError("Simulated Gemini API provider failure.")
+        if self.api_key.startswith("timeout-"):
+            raise GeminiTimeoutError(f"Simulated Gemini request timeout after {self.timeout_seconds} seconds.")
+
+        # Handle mock output for testing
+        if self.api_key.startswith("mock-") or self.api_key == "mock-key":
+            if "No relevant context found." in prompt:
+                mock_text = "I could not find relevant information in the uploaded documents."
+            else:
+                mock_text = (
+                    "Based on the provided documents, the refund policy allows you to request a full refund "
+                    "within 30 days of purchase. Shipping fees are non-refundable. "
+                    "[Document: RefundPolicy.pdf, Page: 1, Chunk ID: c1]"
+                )
+            
+            # Yield in small chunks simulating network streaming
+            words = mock_text.split(" ")
+            for i, word in enumerate(words):
+                chunk_to_yield = word + (" " if i < len(words) - 1 else "")
+                yield chunk_to_yield
+                time.sleep(0.01)
+            return
+
+        # Real API Execution with streaming
+        model = genai.GenerativeModel(model_name=self.model_name)
+        generation_config = genai.types.GenerationConfig(
+            temperature=self.temperature,
+            max_output_tokens=self.max_output_tokens
+        )
+
+        try:
+            response = model.generate_content_stream(
+                prompt,
+                generation_config=generation_config,
+                request_options={"timeout": float(self.timeout_seconds)}
+            )
+            for chunk in response:
+                if chunk.text:
+                    yield chunk.text
+        except (httpx.TimeoutException, TimeoutError) as e:
+            logger.error(f"Gemini API call timed out: {str(e)}")
+            raise GeminiTimeoutError(f"Gemini API call timed out: {str(e)}")
+        except Exception as e:
+            logger.error(f"Error during Gemini stream generation: {str(e)}")
+            raise GeminiServiceError(f"Streaming failed: {str(e)}")
