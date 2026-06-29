@@ -31,6 +31,14 @@ class AnswerSourceSchema(BaseModel):
     document: str
     page: Optional[int] = None
 
+class VerificationSchema(BaseModel):
+    confidence: float
+    verification_status: str
+    reason: str
+    retrieval_count: int
+    average_similarity: float
+    citations_count: int
+
 class AnswerResponseSchema(BaseModel):
     question: str
     answer: str
@@ -38,6 +46,7 @@ class AnswerResponseSchema(BaseModel):
     retrieval_count: int
     model: str
     status: str
+    verification: VerificationSchema
 
 # --- Chat Answer Endpoint ---
 
@@ -69,7 +78,8 @@ async def generate_chat_answer(
             "sources": result["sources"],
             "retrieval_count": result["retrieval_count"],
             "model": result["model"],
-            "status": "success"
+            "status": "success",
+            "verification": result["verification"]
         }
     except ValueError as e:
         raise HTTPException(

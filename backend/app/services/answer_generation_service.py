@@ -61,11 +61,23 @@ class AnswerGenerationService:
         # 4. Optimization: If no chunks retrieved or optimized, bypass Gemini API calls to save costs
         if optimized_count == 0:
             logger.info("No relevant chunks retrieved or kept after optimization. Bypassing Gemini API.")
+            refusal_ans = "I could not find relevant information in the uploaded documents."
+            
+            from app.services.answer_verification_service import AnswerVerificationService
+            verification_service = AnswerVerificationService()
+            verification = verification_service.verify_answer(
+                answer=refusal_ans,
+                retrieved_chunks=[],
+                optimization_summary=summary,
+                citation_list=[]
+            )
+            
             return {
-                "answer": "I could not find relevant information in the uploaded documents.",
+                "answer": refusal_ans,
                 "sources": [],
                 "retrieval_count": 0,
-                "model": settings.gemini_model
+                "model": settings.gemini_model,
+                "verification": verification
             }
 
         # 5. Build the grounded prompt
@@ -92,9 +104,19 @@ class AnswerGenerationService:
         citation_service = CitationService()
         citations = citation_service.build_citations(optimized_chunks)
 
+        from app.services.answer_verification_service import AnswerVerificationService
+        verification_service = AnswerVerificationService()
+        verification = verification_service.verify_answer(
+            answer=answer_text,
+            retrieved_chunks=optimized_chunks,
+            optimization_summary=summary,
+            citation_list=citations
+        )
+
         return {
             "answer": answer_text,
             "sources": citations,
             "retrieval_count": optimized_count,
-            "model": settings.gemini_model
+            "model": settings.gemini_model,
+            "verification": verification
         }
