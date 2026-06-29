@@ -179,7 +179,10 @@ class Feedback(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     message_id = Column(String(36), ForeignKey("messages.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     score = Column(Integer, nullable=False)  # 1 or -1
+    rating = Column(String(50), nullable=True)  # "thumbs_up", "thumbs_down"
     comment = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
