@@ -148,6 +148,7 @@ class ChatSession(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=False)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=True)  # Null for anonymous customers
+    is_deleted = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -162,8 +163,10 @@ class Message(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     session_id = Column(String(36), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False)
     sender = Column(String(50), nullable=False)  # "user", "assistant"
+    role = Column(String(50), nullable=True)  # "user", "assistant", "system"
     content = Column(Text, nullable=False)
     citations = Column(JSON, nullable=True)
+    verification = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships

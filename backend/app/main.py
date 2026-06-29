@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.logging_config import setup_logging
-from app.routers import health, auth, documents, retrieval, prompt, answer, citations
+from app.routers import health, auth, documents, retrieval, prompt, answer, citations, sessions
 
 # Initialize application logging before other operations
 setup_logging()
@@ -33,5 +33,6 @@ app.include_router(retrieval.router)
 app.include_router(prompt.router)
 app.include_router(answer.router)
 app.include_router(citations.router)
+app.include_router(sessions.router)
 
 logger.info(f"Successfully initialized application foundation: {settings.app_name} v{settings.app_version}")
