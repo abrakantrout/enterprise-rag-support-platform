@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.database.connection import get_db
-from app.database.models import Document, User
+from app.database.models import Document, User, DocumentVersion, DocumentChunk
 from app.middleware.auth import get_current_user, RoleChecker
 
 logger = logging.getLogger(__name__)
@@ -488,4 +488,181 @@ async def chunk_document_endpoint(
         "largest_chunk": largest_chunk,
         "smallest_chunk": smallest_chunk,
         "first_chunk_preview": first_chunk_preview
+    }
+
+
+# --- Chunks Persistence Schemas & Endpoint ---
+class ChunksPersistenceResponseSchema(BaseModel):
+    document_id: str
+    chunks_created: int
+    average_chunk_size: float
+    largest_chunk: int
+    smallest_chunk: int
+    status: str
+    message: str
+
+@router.post("/{document_id}/chunks", response_model=ChunksPersistenceResponseSchema)
+async def persist_document_chunks(
+    document_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_or_agent)
+):
+    """
+    Validates document, checks physical file, extracts text, generates chunks,
+    deletes any existing chunks for this document, and stores them in PostgreSQL.
+    """
+    # 1. Validate Document is Active & Not Soft-deleted
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.is_deleted == False,
+        Document.organization_id == current_user.organization_id
+    ).first()
+
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+
+    # 2. Locate File on Disk
+    filename_part = os.path.basename(doc.stored_path)
+    physical_path = os.path.join(settings.uploads_dir, filename_part)
+
+    if not os.path.exists(physical_path):
+        doc.status = "Failed"
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Physical file was missing from storage disk."
+        )
+
+    # 3. Extract Pages Text using the existing service
+    try:
+        from app.services.document_extraction import extract_text_from_file
+        pages = extract_text_from_file(physical_path, doc.file_type)
+    except Exception as e:
+        logger.error(f"Text extraction failed during chunks persistence for document {document_id}: {str(e)}")
+        doc.status = "Failed"
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Extraction failed: {str(e)}"
+        )
+
+    # 4. Generate Semantic Chunks using the existing service
+    try:
+        chunks = chunk_document(
+            doc_id=doc.id,
+            pages=pages,
+            chunk_size=settings.chunk_size,
+            chunk_overlap=settings.chunk_overlap,
+            chunk_max_size=settings.chunk_max_size
+        )
+    except ChunkingValidationError as e:
+        logger.error(f"Chunking validation failed during persistence for document {document_id}: {str(e)}")
+        doc.status = "Failed"
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Chunking validation error: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error chunking document {document_id} during persistence: {str(e)}")
+        doc.status = "Failed"
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unexpected error occurred during text chunking"
+        )
+
+    if not chunks:
+        doc.status = "Failed"
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Document text produced zero chunks."
+        )
+
+    # 5. Delete existing chunks for this document if any exist (Idempotency)
+    try:
+        db.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete()
+        db.flush()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Database error deleting existing chunks for document {document_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database failure preparing table for new chunks"
+        )
+
+    # 6. Retrieve active version or create a default version
+    version = db.query(DocumentVersion).filter(
+        DocumentVersion.document_id == document_id,
+        DocumentVersion.is_active == True
+    ).first()
+
+    if not version:
+        try:
+            version = DocumentVersion(
+                document_id=document_id,
+                version="1.0",
+                is_active=True
+            )
+            db.add(version)
+            db.flush()
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Database error creating document version: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Database failure creating document version"
+            )
+
+    # 7. Store new chunks in PostgreSQL
+    db_chunks = []
+    try:
+        for chunk in chunks:
+            db_chunk = DocumentChunk(
+                version_id=version.id,
+                document_id=document_id,
+                chunk_index=chunk["chunk_index"],
+                page_number=chunk["page_number"],
+                chunk_text=chunk["text"],
+                character_count=chunk["character_count"],
+                start_offset=chunk["start_offset"],
+                end_offset=chunk["end_offset"]
+            )
+            db_chunks.append(db_chunk)
+        db.add_all(db_chunks)
+
+        # 8. Update document status appropriately
+        doc.status = "Completed"
+        doc.extracted_at = datetime.utcnow()
+        doc.updated_at = datetime.utcnow()
+        
+        db.commit()
+        logger.info(f"Persisted {len(chunks)} chunks for document {document_id}")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Database error persisting chunks for document {document_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database failure persisting document chunks"
+        )
+
+    # 9. Return a persistence summary
+    number_of_chunks = len(chunks)
+    sizes = [c["character_count"] for c in chunks]
+    average_chunk_size = sum(sizes) / number_of_chunks
+    largest_chunk = max(sizes)
+    smallest_chunk = min(sizes)
+
+    return {
+        "document_id": document_id,
+        "chunks_created": number_of_chunks,
+        "average_chunk_size": average_chunk_size,
+        "largest_chunk": largest_chunk,
+        "smallest_chunk": smallest_chunk,
+        "status": "Completed",
+        "message": f"Successfully persisted {number_of_chunks} document chunks into PostgreSQL."
     }

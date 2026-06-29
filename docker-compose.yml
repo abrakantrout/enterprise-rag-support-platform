@@ -4,6 +4,7 @@ services:
   db:
     image: postgres:15-alpine
     container_name: rag_postgres_db
+    restart: unless-stopped
     environment:
       POSTGRES_DB: rag_db
       POSTGRES_USER: postgres
@@ -21,6 +22,7 @@ services:
   chroma:
     image: chromadb/chroma:latest
     container_name: rag_chroma_db
+    restart: unless-stopped
     environment:
       ANONYMIZED_TELEMETRY: "False"
     ports:

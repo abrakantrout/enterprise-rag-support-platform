@@ -97,6 +97,7 @@ class Document(Base):
     # Relationships
     collection = relationship("KnowledgeCollection", back_populates="documents")
     versions = relationship("DocumentVersion", back_populates="document", cascade="all, delete-orphan")
+    chunks = relationship("DocumentChunk", back_populates="document", cascade="all, delete-orphan")
     uploader = relationship("User", back_populates="uploaded_documents")
     organization = relationship("Organization", back_populates="documents")
 
@@ -120,13 +121,19 @@ class DocumentChunk(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     version_id = Column(String(36), ForeignKey("document_versions.id", ondelete="CASCADE"), nullable=False)
+    document_id = Column(String(36), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
     chunk_index = Column(Integer, nullable=False)
     page_number = Column(Integer, nullable=True)
     section_heading = Column(String(255), nullable=True)
+    chunk_text = Column(Text, nullable=False)
+    character_count = Column(Integer, nullable=False)
+    start_offset = Column(Integer, nullable=True)
+    end_offset = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
     version = relationship("DocumentVersion", back_populates="chunks")
+    document = relationship("Document", back_populates="chunks")
 
 
 class ChatSession(Base):
