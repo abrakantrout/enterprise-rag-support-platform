@@ -18,6 +18,8 @@ htmlcov/
 # Databases
 *.sqlite
 *.db
+backend/chroma_db/
+test_chroma/
 
 # Application data directories
 logs/

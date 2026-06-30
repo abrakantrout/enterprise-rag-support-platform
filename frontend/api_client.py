@@ -19,7 +19,7 @@ class APIClient:
 
     def check_health(self) -> bool:
         try:
-            r = requests.get(f"{self.base_url}/api/v1/health", timeout=3)
+            r = requests.get(f"{self.base_url}/health", timeout=3)
             return r.status_code == 200
         except Exception:
             return False

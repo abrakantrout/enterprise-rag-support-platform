@@ -18,6 +18,16 @@ def get_health_status() -> dict:
     db_ok = check_db_connection()
     chroma_ok = check_chroma_connection()
 
+    # Get embedding mode diagnostics safely
+    try:
+        from app.services.embedding_service import EmbeddingService
+        embed_service = EmbeddingService()
+        embedding_mode = embed_service.embedding_mode
+        embedding_model = embed_service.model_name
+    except Exception:
+        embedding_mode = "UNKNOWN"
+        embedding_model = "UNKNOWN"
+
     # The application status is unhealthy if any critical system is offline
     overall_status = "healthy" if (db_ok and chroma_ok) else "unhealthy"
 
@@ -25,6 +35,8 @@ def get_health_status() -> dict:
         "status": overall_status,
         "database": "connected" if db_ok else "disconnected",
         "chromadb": "connected" if chroma_ok else "disconnected",
+        "embedding_mode": embedding_mode,
+        "embedding_model": embedding_model,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "version": settings.app_version
     }

@@ -18,5 +18,5 @@ COPY . .
 # Expose FastAPI backend port
 EXPOSE 8000
 
-# Execute server using reload settings for active development
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "app"]
+# Run migrations then start the server
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir app"]

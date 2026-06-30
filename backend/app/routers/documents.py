@@ -284,6 +284,15 @@ def delete_document(
             detail="Failed to update database metadata during deletion"
         )
 
+    # Clean up ChromaDB vectors for this document
+    try:
+        from app.services.vector_indexing_service import VectorIndexingService
+        indexing_service = VectorIndexingService()
+        indexing_service.delete_document_vectors(document_id)
+        logger.info(f"Deleted vectors for document {document_id} from ChromaDB")
+    except Exception as e:
+        logger.error(f"Failed to delete ChromaDB vectors for document {document_id}: {str(e)}")
+
     # Remove physical file
     try:
         if os.path.exists(physical_path):

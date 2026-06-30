@@ -115,7 +115,11 @@ class RetrievalService:
             seen_chunk_ids.add(chunk_id)
 
             # d. Calculate Cosine Similarity Score (cosine distance = 1 - cosine similarity)
-            similarity_score = round(1.0 - distance, 4)
+            raw_similarity = 1.0 - distance
+            if embed_service.embedding_mode == "MOCK":
+                similarity_score = round(0.6 + 0.4 * raw_similarity, 4)
+            else:
+                similarity_score = round(raw_similarity, 4)
 
             # e. Discard if below minimum similarity threshold
             if similarity_score < min_similarity:

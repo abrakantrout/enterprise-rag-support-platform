@@ -45,6 +45,24 @@ The platform is designed around a clean, decoupled clean architecture, prioritiz
     *   Interactive diagnostics `/health` endpoint.
     *   Dev-ready Docker and Docker-compose orchestration.
 
+## RAG Quality & API Keys
+
+The platform operates in one of two embedding modes depending on your configuration:
+
+*   **REAL Mode**:
+    *   **Trigger**: Activated when a valid, real `GOOGLE_API_KEY` or `GEMINI_API_KEY` is provided in `.env` (not empty, not starting with `mock-`, and not a placeholder).
+    *   **Behavior**: Generates vector representations using high-fidelity Gemini embedding APIs (`models/text-embedding-004`). Cosine similarity scores are calculated raw without scaling.
+    *   **Production Readiness**: **Ready for Production**. This is the required configuration for real-world document search and customer support query resolution.
+*   **MOCK Mode**:
+    *   **Trigger**: Activated if no API key is specified, placeholders are used, or keys begin with `mock-` (e.g., `mock-key`).
+    *   **Behavior**: Uses a simplified, local Bag-of-Words and character n-gram matching algorithm with synonym expansion. Retrieval similarity scores are scaled to fit system thresholds.
+    *   **Production Readiness**: **NOT Production-Ready**. Mock mode exists solely for offline local development, demo workflows, and automated pipeline validation. It is not suitable for production deployment.
+
+To configure real RAG quality, specify a valid Gemini key in your `.env` file:
+```env
+GOOGLE_API_KEY=your_real_gemini_api_key_here
+```
+
 ---
 
 ## Local Setup & Run Instructions

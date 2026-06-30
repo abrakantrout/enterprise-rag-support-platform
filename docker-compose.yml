@@ -50,7 +50,9 @@ services:
       LOG_LEVEL: "INFO"
       LOG_FILE: "/workspace/logs/app.log"
       UPLOADS_DIR: "/workspace/uploads"
-      GEMINI_API_KEY: "mock-key"
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
     volumes:
       - ./backend:/workspace
       - ./docs:/workspace/docs  # Expose documentation in container
@@ -71,6 +73,8 @@ services:
     restart: unless-stopped
     ports:
       - "8501:8501"
+    environment:
+      BACKEND_API_URL: "http://backend:8000"
     volumes:
       - ./frontend:/workspace
     depends_on:
