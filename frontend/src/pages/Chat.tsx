@@ -14,7 +14,9 @@ import {
   ChevronUp,
   AlertCircle,
   Clock,
-  Sparkles
+  Sparkles,
+  Trash2,
+  CheckCircle2
 } from 'lucide-react';
 
 export const Chat: React.FC = () => {
@@ -26,6 +28,8 @@ export const Chat: React.FC = () => {
   const [sessionLoading, setSessionLoading] = useState(false);
   const [quotaError, setQuotaError] = useState<string | null>(null);
   const [generalError, setGeneralError] = useState<string | null>(null);
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+  const [sessionSuccessMsg, setSessionSuccessMsg] = useState<string | null>(null);
 
   // Accordions
   const [openCitations, setOpenCitations] = useState<Record<string, boolean>>({});
@@ -82,6 +86,14 @@ export const Chat: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
+  const getSessionDisplayTitle = (session: ChatSession) => {
+    const rawTitle = session.title || 'New chat';
+    if (rawTitle.length > 45) {
+      return rawTitle.slice(0, 45) + '...';
+    }
+    return rawTitle;
+  };
+
   const handleCreateSession = async () => {
     try {
       const newSession = await api.createChatSession();
@@ -90,6 +102,28 @@ export const Chat: React.FC = () => {
     } catch (err) {
       console.error(err);
       setGeneralError('Failed to create new chat session.');
+    }
+  };
+
+  const handleDeleteSession = async () => {
+    if (!deletingSessionId) return;
+    setGeneralError(null);
+    setSessionSuccessMsg(null);
+    try {
+      await api.deleteChatSession(deletingSessionId);
+      setSessionSuccessMsg('Chat session deleted successfully.');
+      if (currentSessionId === deletingSessionId) {
+        setCurrentSessionId(null);
+      }
+      setDeletingSessionId(null);
+      await fetchSessions();
+      setTimeout(() => {
+        setSessionSuccessMsg(null);
+      }, 4000);
+    } catch (err: any) {
+      console.error(err);
+      setGeneralError(err.response?.data?.detail || 'Failed to delete chat session.');
+      setDeletingSessionId(null);
     }
   };
 
@@ -125,7 +159,7 @@ export const Chat: React.FC = () => {
         err.response?.status === 429
       ) {
         setQuotaError(
-          '⚠️ Gemini API quota is exhausted. Knowledge retrieval works, but generating answers is blocked. Try again later.'
+          'Gemini quota is currently exhausted. Retrieval and indexing are working, but answer generation is temporarily blocked by the provider. Please try again later.'
         );
       } else {
         setGeneralError(`Generation failed: ${detail || err.message}`);
@@ -183,21 +217,35 @@ export const Chat: React.FC = () => {
             sessions.map((sess) => {
               const isSelected = sess.session_id === currentSessionId;
               return (
-                <button
+                <div
                   key={sess.session_id}
-                  onClick={() => setCurrentSessionId(sess.session_id)}
-                  className={`w-full text-left px-3.5 py-3 rounded-xl text-xs flex items-center justify-between transition-all duration-150 cursor-pointer ${
+                  className={`group w-full px-3 py-2.5 rounded-xl text-xs flex items-center justify-between transition-all duration-150 border ${
                     isSelected
-                      ? 'bg-white border border-slate-200/80 font-bold text-violet-700 shadow-sm'
-                      : 'hover:bg-slate-100 border border-transparent text-slate-500 hover:text-slate-800'
+                      ? 'bg-white border-slate-200/80 text-violet-700 shadow-sm font-bold'
+                      : 'hover:bg-slate-100 border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  <div className="flex items-center space-x-2.5 truncate">
+                  <div 
+                    onClick={() => setCurrentSessionId(sess.session_id)}
+                    className="flex-1 flex items-center space-x-2.5 truncate cursor-pointer py-0.5"
+                  >
                     <MessageSquare className={`w-4 h-4 shrink-0 ${isSelected ? 'text-violet-650' : 'text-slate-400'}`} />
-                    <span className="truncate">Session {sess.session_id.slice(0, 8)}</span>
+                    <span className="truncate">
+                      {getSessionDisplayTitle(sess)}
+                    </span>
                   </div>
-                  <ChevronRightIcon className="w-3 h-3 text-slate-350 shrink-0" />
-                </button>
+                  
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeletingSessionId(sess.session_id);
+                    }}
+                    className="p-1 hover:bg-slate-200 hover:text-rose-600 rounded-lg text-slate-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-150 cursor-pointer ml-1"
+                    title="Delete session"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               );
             })
           )}
@@ -208,11 +256,18 @@ export const Chat: React.FC = () => {
       <div className="flex-1 flex flex-col justify-between bg-slate-50/20">
         {/* Messages List Area */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {sessionSuccessMsg && (
+            <div className="bg-emerald-50 border border-emerald-250 border-emerald-200 p-4 rounded-xl flex items-start space-x-3 text-emerald-800 shadow-sm animate-fade-in">
+              <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
+              <span className="text-xs font-bold leading-relaxed">{sessionSuccessMsg}</span>
+            </div>
+          )}
+
           {quotaError && (
             <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-start space-x-3 text-amber-800 shadow-sm">
               <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
               <div className="space-y-1">
-                <p className="text-xs font-bold uppercase tracking-wider">Quota Exhausted</p>
+                <p className="text-xs font-bold uppercase tracking-wider">Quota Warning</p>
                 <p className="text-xs leading-relaxed font-semibold">{quotaError}</p>
               </div>
             </div>
@@ -421,20 +476,37 @@ export const Chat: React.FC = () => {
           </button>
         </form>
       </div>
+
+      {/* Session Deletion Confirmation Modal */}
+      {deletingSessionId && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 border border-slate-200 space-y-6">
+            <div>
+              <h3 className="text-base font-bold text-slate-900">Delete Conversation?</h3>
+              <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+                Delete this chat session? This removes the conversation history from your workspace. This action cannot be undone.
+              </p>
+            </div>
+            
+            <div className="flex space-x-3 pt-2">
+              <button
+                onClick={() => setDeletingSessionId(null)}
+                className="flex-1 py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteSession}
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 rounded-xl text-xs font-bold text-white shadow-md transition-colors cursor-pointer"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-// Local inline helper icon since Lucide Chevron Right doesn't need to be imported again
-const ChevronRightIcon = ({ className }: { className?: string }) => (
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    fill="none" 
-    viewBox="0 0 24 24" 
-    strokeWidth={2.5} 
-    stroke="currentColor" 
-    className={className}
-  >
-    <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-  </svg>
-);
+

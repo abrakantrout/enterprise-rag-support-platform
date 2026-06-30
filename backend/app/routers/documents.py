@@ -34,6 +34,12 @@ EXTENSION_TO_MIME = {
 # --- Pydantic Schemas ---
 from pydantic import BaseModel
 
+class DocumentPipelineStatusSchema(BaseModel):
+    extracted: bool
+    chunked: bool
+    embedded: bool
+    indexed: bool
+
 class DocumentResponseSchema(BaseModel):
     id: str
     filename: str
@@ -48,6 +54,7 @@ class DocumentResponseSchema(BaseModel):
     extracted_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
+    pipeline: Optional[DocumentPipelineStatusSchema] = None
 
     class Config:
         from_attributes = True

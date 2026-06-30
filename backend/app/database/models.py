@@ -101,6 +101,20 @@ class Document(Base):
     uploader = relationship("User", back_populates="uploaded_documents")
     organization = relationship("Organization", back_populates="documents")
 
+    @property
+    def pipeline(self):
+        extracted = self.extracted_at is not None
+        chunks = self.chunks
+        chunked = len(chunks) > 0
+        embedded = chunked and all(c.embedding_status == "Completed" for c in chunks)
+        indexed = chunked and all(c.indexed_status == "Completed" for c in chunks)
+        return {
+            "extracted": extracted,
+            "chunked": chunked,
+            "embedded": embedded,
+            "indexed": indexed
+        }
+
 
 class DocumentVersion(Base):
     __tablename__ = "document_versions"

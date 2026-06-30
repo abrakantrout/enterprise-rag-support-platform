@@ -37,6 +37,13 @@ export interface TokenResponse {
   refresh_token: string;
 }
 
+export interface DocumentPipelineStatus {
+  extracted: boolean;
+  chunked: boolean;
+  embedded: boolean;
+  indexed: boolean;
+}
+
 export interface DocumentMetadata {
   id: string;
   filename: string;
@@ -51,6 +58,7 @@ export interface DocumentMetadata {
   extracted_at?: string;
   created_at: string;
   updated_at: string;
+  pipeline?: DocumentPipelineStatus;
 }
 
 export interface DocumentListResponse {
@@ -96,6 +104,7 @@ export interface LowRatedAnswer {
 export interface ChatSession {
   session_id: string;
   created_at: string;
+  title?: string;
 }
 
 export interface ChatMessage {
@@ -238,6 +247,11 @@ export const api = {
 
   getChatSession: async (sessionId: string): Promise<ChatSessionDetail> => {
     const res = await apiClient.get<ChatSessionDetail>(`/api/v1/chat/sessions/${sessionId}`);
+    return res.data;
+  },
+
+  deleteChatSession: async (sessionId: string): Promise<{ message: string }> => {
+    const res = await apiClient.delete<{ message: string }>(`/api/v1/chat/sessions/${sessionId}`);
     return res.data;
   },
 

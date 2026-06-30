@@ -48,13 +48,11 @@ export const Documents: React.FC = () => {
 
       const stages: typeof docStages = {};
       data.items.forEach((doc) => {
-        const isCompleted = doc.status === 'Completed';
-        const isExtracted = !!doc.extracted_at || isCompleted;
         stages[doc.id] = {
-          extracted: isExtracted,
-          chunked: false,
-          embedded: false,
-          indexed: false
+          extracted: doc.pipeline?.extracted || false,
+          chunked: doc.pipeline?.chunked || false,
+          embedded: doc.pipeline?.embedded || false,
+          indexed: doc.pipeline?.indexed || false
         };
       });
       setDocStages(stages);
@@ -159,8 +157,7 @@ export const Documents: React.FC = () => {
         }));
       }
       
-      const updatedList = await api.listDocuments(1, 50);
-      setDocuments(updatedList.items);
+      await fetchDocuments();
     } catch (err: any) {
       console.error(err);
       const detail = err.response?.data?.detail || err.message || 'Operation failed.';
@@ -301,14 +298,23 @@ export const Documents: React.FC = () => {
             {documents.map((doc) => {
               const stages = docStages[doc.id] || { extracted: false, chunked: false, embedded: false, indexed: false };
               const feedback = docFeedback[doc.id];
-              const isCompleted = doc.status === 'Completed';
-              
-              // Define pipeline stage layout configurations
+              const showPipelineCompleted = stages.extracted && stages.chunked && stages.embedded && stages.indexed;
+
+              const activeStep = !stages.extracted
+                ? 'extract'
+                : !stages.chunked
+                ? 'chunk'
+                : !stages.embedded
+                ? 'embed'
+                : !stages.indexed
+                ? 'index'
+                : null;
+
               const steps = [
-                { key: 'extract', name: 'Extract Text', num: '1️⃣', active: true, done: stages.extracted },
-                { key: 'chunk', name: 'Parse Chunks', num: '2️⃣', active: stages.extracted || isCompleted, done: stages.chunked },
-                { key: 'embed', name: 'Embed Vectors', num: '3️⃣', active: stages.chunked, done: stages.embedded },
-                { key: 'index', name: 'Index DB', num: '4️⃣', active: stages.embedded, done: stages.indexed },
+                { key: 'extract', name: 'Extract Text', active: activeStep === 'extract', done: stages.extracted },
+                { key: 'chunk', name: 'Parse Chunks', active: activeStep === 'chunk', done: stages.chunked },
+                { key: 'embed', name: 'Generate Embeddings', active: activeStep === 'embed', done: stages.embedded },
+                { key: 'index', name: 'Index Vectors', active: activeStep === 'index', done: stages.indexed },
               ];
 
               return (
@@ -316,7 +322,7 @@ export const Documents: React.FC = () => {
                   {/* File Metadata Details header */}
                   <div className="flex items-start justify-between flex-wrap gap-4">
                     <div className="flex items-center space-x-3.5">
-                      <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-xl text-slate-450 text-slate-400">
+                      <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-xl text-slate-400">
                         <FileText className="w-5 h-5" />
                       </div>
                       <div className="space-y-1">
@@ -340,11 +346,21 @@ export const Documents: React.FC = () => {
                       </div>
                     </div>
                     
-                    <div className="flex items-center space-x-2 bg-slate-50 border border-slate-100 px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-650">
+                    <div className="flex items-center space-x-2 bg-slate-50 border border-slate-100 px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-600">
                       <Bookmark className="w-3.5 h-3.5 text-violet-500 shrink-0" />
                       <span>{doc.category || 'General'}</span>
                     </div>
                   </div>
+
+                  {/* Pipeline complete status banner */}
+                  {showPipelineCompleted && (
+                    <div className="p-3.5 bg-emerald-50 border border-emerald-100 rounded-xl text-xs font-bold text-emerald-800 flex items-start space-x-2.5 shadow-sm">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                      <span className="leading-relaxed">
+                        Pipeline complete. Document is active for grounded chat.
+                      </span>
+                    </div>
+                  )}
 
                   {/* Stage-step status alerts */}
                   {feedback && (
@@ -389,7 +405,7 @@ export const Documents: React.FC = () => {
                           }`}
                         >
                           {isStepLoading && <Clock className="w-3.5 h-3.5 animate-spin shrink-0" />}
-                          <span>{st.num} {st.name}</span>
+                          <span>{st.name}</span>
                         </button>
                       );
                     })}

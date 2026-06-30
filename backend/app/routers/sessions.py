@@ -29,6 +29,7 @@ class SessionListItemSchema(BaseModel):
     organization_id: str
     user_id: Optional[str]
     created_at: datetime
+    title: Optional[str] = None
 
 class SessionMessageResponseSchema(BaseModel):
     id: str
@@ -95,14 +96,22 @@ async def list_chat_sessions(
         ChatSession.is_deleted == False
     ).order_by(ChatSession.created_at.desc()).all()
 
-    return [
-        {
+    items = []
+    for s in sessions:
+        first_msg = db.query(Message).filter(
+            Message.session_id == s.id,
+            Message.role == "user"
+        ).order_by(Message.created_at.asc()).first()
+        
+        title = first_msg.content if first_msg else "New chat"
+        items.append({
             "session_id": s.id,
             "organization_id": s.organization_id,
             "user_id": s.user_id,
-            "created_at": s.created_at
-        } for s in sessions
-    ]
+            "created_at": s.created_at,
+            "title": title
+        })
+    return items
 
 
 @router.get("/{session_id}", response_model=SessionDetailResponseSchema)
