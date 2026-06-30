@@ -72,11 +72,12 @@ services:
     container_name: rag_frontend_ui
     restart: unless-stopped
     ports:
-      - "8501:8501"
+      - "3000:3000"
     environment:
-      BACKEND_API_URL: "http://backend:8000"
+      - VITE_BACKEND_API_URL=http://localhost:8000
     volumes:
-      - ./frontend:/workspace
+      - ./frontend:/app
+      - /app/node_modules
     depends_on:
       - backend
 

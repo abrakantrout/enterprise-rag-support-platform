@@ -14,17 +14,18 @@ The platform is designed around a clean, decoupled clean architecture, prioritiz
 │   ├── app/
 │   │   ├── core/                  # Configurations, logging settings
 │   │   ├── database/              # PostgreSQL & ChromaDB clients
-│   │   ├── middleware/            # Custom filters (placeholders)
-│   │   ├── routers/               # API route definitions (health router)
-│   │   ├── services/              # Core business services (placeholders)
-│   │   ├── utilities/             # Helper tools (placeholders)
+│   │   ├── middleware/            # Custom filters
+│   │   ├── routers/               # API route definitions
+│   │   ├── services/              # Core business services
+│   │   ├── utilities/             # Helper tools
 │   │   └── main.py                # FastAPI entry point
 │   ├── Dockerfile                 # Backend container definition
 │   └── requirements.txt           # Backend package dependencies
 ├── docs/                          # Architecture & design specifications
-├── frontend/                      # Streamlit user interface client
-│   ├── app.py                     # Frontend entry point
-│   └── Dockerfile                 # Frontend container definition
+├── frontend/                      # React TypeScript user interface client
+│   ├── src/                       # React source files (components, pages, api)
+│   ├── package.json               # Node dependencies and scripts
+│   └── Dockerfile                 # React frontend container definition
 ├── docker-compose.yml             # Container orchestration config
 ├── requirements.txt               # Master package dependencies list
 └── README.md                      # General documentation index
@@ -68,7 +69,8 @@ GOOGLE_API_KEY=your_real_gemini_api_key_here
 ## Local Setup & Run Instructions
 
 ### Prerequisites
-*   Python 3.11+
+*   Node.js 20+ & npm (for bare-metal frontend development)
+*   Python 3.11+ (for bare-metal backend development)
 *   Docker & Docker Compose (recommended)
 *   PostgreSQL & ChromaDB (if running bare-metal)
 
@@ -76,10 +78,10 @@ GOOGLE_API_KEY=your_real_gemini_api_key_here
 1.  Verify Docker is running locally.
 2.  Boot up the multi-container stack from the root directory:
     ```bash
-    docker-compose up --build
+    docker compose up --build
     ```
 3.  Access the applications:
-    *   **Frontend UI:** [http://localhost:8501](http://localhost:8501)
+    *   **Frontend SPA Console:** [http://localhost:3000](http://localhost:3000)
     *   **Backend API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
     *   **Health Diagnostics:** [http://localhost:8000/health](http://localhost:8000/health)
 
@@ -115,24 +117,17 @@ Note: Ensure your local `.env` variables point to `localhost:5432` for PostgreSQ
     uvicorn app.main:app --reload
     ```
 
-#### 3. Running Frontend Streamlit
+#### 3. Running Frontend React Client
 1.  Open a new terminal tab and navigate to the frontend directory:
     ```bash
     cd frontend
     ```
-2.  Create and activate a virtual environment:
+2.  Install packages:
     ```bash
-    python -m venv .venv
-    # Windows
-    .\.venv\Scripts\activate
-    # macOS/Linux
-    source .venv/bin/activate
+    npm install
     ```
-3.  Install dependencies:
+3.  Launch the Vite development server:
     ```bash
-    pip install -r requirements.txt
+    npm run dev
     ```
-4.  Start the Streamlit client:
-    ```bash
-    streamlit run app.py
-    ```
+4.  Open your browser to [http://localhost:3000](http://localhost:3000).
